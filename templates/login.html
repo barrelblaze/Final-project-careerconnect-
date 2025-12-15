@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Login | CareerConnect AI</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+  </head>
+  <body class="auth-page">
+    <div class="auth-card">
+      <h1 class="auth-title">CareerConnect AI</h1>
+      <p class="auth-subtitle">Login to your account</p>
+
+      <form class="auth-form">
+        <label for="email">Email</label>
+        <input id="email" name="email" type="email" placeholder="you@example.com" required />
+
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password" placeholder="••••••••" required />
+
+        <label for="role">Role</label>
+        <select id="role" name="role" required>
+          <option value="" disabled selected>Select role</option>
+          <option value="seeker">Job Seeker</option>
+          <option value="recruiter">Recruiter</option>
+          <option value="admin">Admin</option>
+        </select>
+
+        <button type="submit">Login</button>
+      </form>
+
+      <p class="auth-switch">
+        New here?
+        <a href="{{ url_for('register') }}">Create an account</a>
+      </p>
+    </div>
+  </body>
+</html>
