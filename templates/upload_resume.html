@@ -35,9 +35,9 @@
                 <div class="mb-3">
                   <label class="form-label">Current uploaded resume</label>
                   <div class="d-flex align-items-center gap-2">
-                    <a href="{{ url_for('download_resume', filename=resume.filename) }}">{{ resume.original_filename or resume.filename }}</a>
-                    <small class="text-muted">(replace by choosing a new file below)</small>
-                  </div>
+                      <span>{{ resume.original_filename or resume.filename }}</span>
+                      <small class="text-muted">(replace by choosing a new file below)</small>
+                    </div>
                 </div>
               {% endif %}
 
@@ -73,5 +73,7 @@
         });
       }
     </script>
+
+    
   </body>
 </html>

@@ -206,7 +206,7 @@ def download_resume(filename):
     role = session.get('role')
     conn = get_db()
     cursor = conn.cursor()
-    res = cursor.execute('SELECT user_id FROM resumes WHERE filename = ?', (filename,)).fetchone()
+    res = cursor.execute('SELECT user_id, original_filename FROM resumes WHERE filename = ?', (filename,)).fetchone()
     conn.close()
 
     if not res:
@@ -217,7 +217,14 @@ def download_resume(filename):
         flash('Access denied', 'error')
         return redirect(url_for('seeker_dashboard'))
 
-    return send_from_directory(app.config['UPLOAD_FOLDER'], filename, as_attachment=True)
+    # Serve inline so PDFs and text can be previewed in-browser
+    try:
+        response = send_from_directory(app.config['UPLOAD_FOLDER'], filename, as_attachment=False)
+        display_name = res.get('original_filename') if res and res.get('original_filename') else filename
+        response.headers['Content-Disposition'] = f'inline; filename="{display_name}"'
+        return response
+    except Exception:
+        return send_from_directory(app.config['UPLOAD_FOLDER'], filename, as_attachment=True)
 
 @app.route("/login", methods=['GET', 'POST'])
 def login():

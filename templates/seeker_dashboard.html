@@ -67,7 +67,7 @@
               {% if resume %}
               <div class="small text-muted mb-3">
                 <strong>Resume:</strong>
-                <a href="{{ url_for('download_resume', filename=resume.filename) }}">{{ resume.original_filename or resume.filename }}</a>
+                <span>{{ resume.original_filename or resume.filename }}</span>
                 <div class="mt-2">
                   <a class="btn btn-sm btn-outline-primary" href="{{ url_for('upload_resume') }}">Replace</a>
                 </div>
@@ -286,6 +286,7 @@
       integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL"
       crossorigin="anonymous"
     ></script>
+    
   </body>
 </html>
 
