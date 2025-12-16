@@ -12,11 +12,16 @@
     />
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
   </head>
-  <body class="auth-page">
+  <body class="auth-page" style="position: relative; padding: 2rem 0;">
+    <a href="{{ url_for('register_choice') }}" class="btn btn-primary rounded-circle" style="position: absolute; top: 20px; left: 20px; width: 45px; height: 45px; display: flex; align-items: center; justify-content: center; padding: 0; z-index: 10;">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M19 12H5M12 19l-7-7 7-7"/>
+      </svg>
+    </a>
     <div class="container">
       <div class="row justify-content-center">
-        <div class="col-lg-5 col-md-7">
-          <div class="card shadow auth-card">
+        <div class="col-lg-10 col-xl-9">
+          <div class="card shadow" style="border-radius: 12px; border: 1px solid #e5e7eb;">
             <div class="card-body p-4 p-md-5">
               <div class="text-center mb-4">
                 <h1 class="auth-title mb-1">CareerConnect</h1>
@@ -24,60 +29,165 @@
               </div>
 
               <form class="auth-form" autocomplete="off">
-                <div class="mb-3">
-                  <label class="form-label" for="username">Username</label>
-                  <input
-                    id="username"
-                    name="username"
-                    type="text"
-                    class="form-control"
-                    placeholder="username"
-                    autocomplete="off"
-                    required
-                  />
+                <div class="row">
+                  <div class="col-md-6">
+                    <div class="mb-3">
+                      <label class="form-label" for="username">Username</label>
+                      <input
+                        id="username"
+                        name="username"
+                        type="text"
+                        class="form-control"
+                        placeholder="username"
+                        autocomplete="off"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div class="col-md-6">
+                    <div class="mb-3">
+                      <label class="form-label" for="password">Password</label>
+                      <div class="position-relative">
+                        <input
+                          id="password"
+                          name="password"
+                          type="password"
+                          class="form-control"
+                          placeholder="••••••••"
+                          autocomplete="new-password"
+                          required
+                        />
+                        <button type="button" class="btn btn-link position-absolute end-0 top-50 translate-middle-y pe-3" onclick="togglePassword('password')" style="border: none; background: none; padding: 0; z-index: 5;">
+                          <svg id="password-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: #6b7280;">
+                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                            <circle cx="12" cy="12" r="3"></circle>
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
-                <div class="mb-3">
-                  <label class="form-label" for="email">Email</label>
-                  <input
-                    id="email"
-                    name="email"
-                    type="email"
-                    class="form-control"
-                    placeholder="your.email@example.com"
-                    autocomplete="off"
-                    required
-                  />
+                <div class="row">
+                  <div class="col-md-6">
+                    <div class="mb-3">
+                      <label class="form-label" for="full_name">Full Name</label>
+                      <input
+                        id="full_name"
+                        name="full_name"
+                        type="text"
+                        class="form-control"
+                        placeholder="Enter your full name"
+                        autocomplete="name"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div class="col-md-6">
+                    <div class="mb-3">
+                      <label class="form-label" for="confirm_password">Confirm Password</label>
+                      <div class="position-relative">
+                        <input
+                          id="confirm_password"
+                          name="confirm_password"
+                          type="password"
+                          class="form-control"
+                          placeholder="••••••••"
+                          autocomplete="new-password"
+                          required
+                        />
+                        <button type="button" class="btn btn-link position-absolute end-0 top-50 translate-middle-y pe-3" onclick="togglePassword('confirm_password')" style="border: none; background: none; padding: 0; z-index: 5;">
+                          <svg id="confirm_password-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: #6b7280;">
+                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                            <circle cx="12" cy="12" r="3"></circle>
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
-                <div class="mb-3">
-                  <label class="form-label" for="password">Password</label>
-                  <input
-                    id="password"
-                    name="password"
-                    type="password"
-                    class="form-control"
-                    placeholder="••••••••"
-                    autocomplete="new-password"
-                    required
-                  />
+                <div class="row">
+                  <div class="col-md-6">
+                    <div class="mb-3">
+                      <label class="form-label" for="email">Email</label>
+                      <input
+                        id="email"
+                        name="email"
+                        type="email"
+                        class="form-control"
+                        placeholder="your.email@example.com"
+                        autocomplete="email"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div class="col-md-6">
+                    <div class="mb-3">
+                      <label class="form-label" for="education">Education</label>
+                      <select
+                        id="education"
+                        name="education"
+                        class="form-select"
+                        required
+                      >
+                        <option value="">Select your education level</option>
+                        <option value="High School">High School</option>
+                        <option value="Diploma">Diploma</option>
+                        <option value="Bachelor's Degree">Bachelor's Degree</option>
+                        <option value="Master's Degree">Master's Degree</option>
+                        <option value="PhD">PhD</option>
+                        <option value="Other">Other</option>
+                      </select>
+                    </div>
+                  </div>
                 </div>
 
-                <div class="mb-3">
-                  <label class="form-label" for="confirm_password">Confirm Password</label>
-                  <input
-                    id="confirm_password"
-                    name="confirm_password"
-                    type="password"
-                    class="form-control"
-                    placeholder="••••••••"
-                    autocomplete="new-password"
-                    required
-                  />
+                <div class="row">
+                  <div class="col-md-6">
+                    <div class="mb-3">
+                      <label class="form-label" for="experience">Experience (Years)</label>
+                      <input
+                        id="experience"
+                        name="experience"
+                        type="number"
+                        class="form-control"
+                        placeholder="0"
+                        min="0"
+                        max="50"
+                        step="0.5"
+                        autocomplete="off"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div class="col-md-6">
+                    <div class="mb-3">
+                      <label class="form-label" for="primary_skills">Primary Skills</label>
+                      <input
+                        id="primary_skills"
+                        name="primary_skills"
+                        type="text"
+                        class="form-control"
+                        placeholder="e.g., Python, JavaScript, React, SQL"
+                        autocomplete="off"
+                        required
+                      />
+                      <small class="form-text text-muted" style="opacity: 0.6;">Enter your skills separated by commas</small>
+                    </div>
+                  </div>
                 </div>
 
-                <div class="d-grid mt-4">
-                  <button type="submit" class="btn btn-primary btn-lg">Create Account</button>
+                <div class="row">
+                  <div class="col-12">
+                    <div class="d-grid mt-3">
+                      <button type="submit" class="btn btn-primary btn-lg">Create Account</button>
+                    </div>
+                  </div>
                 </div>
               </form>
 
@@ -96,6 +206,19 @@
       integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL"
       crossorigin="anonymous"
     ></script>
+    <script>
+      function togglePassword(inputId) {
+        const input = document.getElementById(inputId);
+        const icon = document.getElementById(inputId + '-icon');
+        if (input.type === 'password') {
+          input.type = 'text';
+          icon.innerHTML = '<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line>';
+        } else {
+          input.type = 'password';
+          icon.innerHTML = '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle>';
+        }
+      }
+    </script>
   </body>
 </html>
 
