@@ -1,7 +1,16 @@
-from flask import Flask, render_template, redirect, url_for, request, flash
+from flask import (
+    Flask,
+    render_template,
+    redirect,
+    url_for,
+    request,
+    flash,
+    session,
+)
 import sqlite3
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
+from functools import wraps
 import os
 
 app = Flask(__name__)
@@ -66,6 +75,28 @@ def init_db():
 # Initialize database on app start
 init_db()
 
+
+# --------- Auth helpers --------- #
+def login_required(role=None):
+    """Decorator to enforce login and optional role checking."""
+
+    def decorator(f):
+        @wraps(f)
+        def wrapped(*args, **kwargs):
+            user_id = session.get("user_id")
+            user_role = session.get("role")
+            if not user_id:
+                flash("Please login to continue", "error")
+                return redirect(url_for("login"))
+            if role and user_role != role:
+                flash("Access denied for this role", "error")
+                return redirect(url_for("login"))
+            return f(*args, **kwargs)
+
+        return wrapped
+
+    return decorator
+
 @app.route("/")
 def home():
     return redirect(url_for("login"))
@@ -85,7 +116,12 @@ def login():
             conn.close()
             
             if user and check_password_hash(user['password_hash'], password):
-                # Login successful - redirect based on role
+                # Set session
+                session['user_id'] = user['id']
+                session['username'] = user['username']
+                session['role'] = user['role']
+
+                # Redirect based on role
                 if user['role'] == 'seeker':
                     return redirect(url_for('seeker_dashboard'))
                 elif user['role'] == 'recruiter':
@@ -236,16 +272,51 @@ def register_company():
     return render_template("register_company.html")
 
 @app.route("/seeker/dashboard")
+@login_required(role="seeker")
 def seeker_dashboard():
-    return render_template("seeker_dashboard.html")
+    user_id = session.get("user_id")
+    conn = get_db()
+    cursor = conn.cursor()
+
+    profile = cursor.execute(
+        """
+        SELECT u.username,
+               js.full_name,
+               js.email,
+               js.education,
+               js.experience_years,
+               js.primary_skills
+        FROM users u
+        LEFT JOIN job_seekers js ON js.user_id = u.id
+        WHERE u.id = ?
+        """,
+        (user_id,),
+    ).fetchone()
+
+    conn.close()
+
+    if not profile:
+        flash("No profile found. Please complete your profile.", "error")
+        profile = {}
+
+    return render_template("seeker_dashboard.html", profile=profile)
 
 @app.route("/recruiter/dashboard")
+@login_required(role="recruiter")
 def recruiter_dashboard():
     return render_template("recruiter_dashboard.html")
 
 @app.route("/admin/dashboard")
+@login_required(role="admin")
 def admin_dashboard():
     return render_template("admin_dashboard.html")
+
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    flash("Logged out", "success")
+    return redirect(url_for("login"))
 
 if __name__ == "__main__":
     app.run(debug=True)

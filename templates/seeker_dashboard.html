@@ -21,16 +21,8 @@
           <span class="navbar-toggler-icon"></span>
         </button>
         <div class="collapse navbar-collapse" id="seekerNav">
-          <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-            <li class="nav-item"><a class="nav-link active" aria-current="page" href="{{ url_for('seeker_dashboard') }}">Dashboard</a></li>
-            <li class="nav-item"><a class="nav-link" href="#recommended">Recommended</a></li>
-            <li class="nav-item"><a class="nav-link" href="#applications">Applications</a></li>
-            <li class="nav-item"><a class="nav-link" href="#saved">Saved Jobs</a></li>
-            <li class="nav-item"><a class="nav-link" href="#profile">Profile</a></li>
-          </ul>
-          <div class="d-flex gap-2">
-            <button class="btn btn-outline-secondary btn-sm">Settings</button>
-            <button class="btn btn-outline-danger btn-sm">Logout</button>
+          <div class="ms-auto">
+            <a class="btn btn-outline-danger btn-sm" href="{{ url_for('logout') }}">Logout</a>
           </div>
         </div>
       </div>
@@ -56,18 +48,18 @@
             <div class="card-body">
               <div class="d-flex align-items-center mb-3">
                 <div class="rounded-circle bg-primary bg-opacity-10 text-primary d-flex align-items-center justify-content-center" style="width: 48px; height: 48px; font-weight: 700;">
-                  JS
+                  {{ (profile.full_name or profile.username or 'JS')[:2]|upper if profile else 'JS' }}
                 </div>
                 <div class="ms-3">
-                  <h5 class="mb-0">Full Name</h5>
-                  <small class="text-muted">Headline / Role</small>
+                  <h5 class="mb-0">{{ profile.full_name or 'Your Name' }}</h5>
+                  <small class="text-muted">{{ profile.education or 'Your education' }}</small>
                 </div>
               </div>
               <ul class="list-unstyled mb-3 small text-muted">
-                <li class="mb-1">Location: City, Country</li>
-                <li class="mb-1">Experience: 3.5 years</li>
-                <li class="mb-1">Primary skills: Python, SQL, React</li>
-                <li class="mb-1">Resume updated: 2 days ago</li>
+                <li class="mb-1">Username: {{ profile.username or '-' }}</li>
+                <li class="mb-1">Email: {{ profile.email or '-' }}</li>
+                <li class="mb-1">Experience: {{ profile.experience_years or '0' }} years</li>
+                <li class="mb-1">Primary skills: {{ profile.primary_skills or '-' }}</li>
               </ul>
               <button class="btn btn-outline-primary w-100">View / Edit Profile</button>
             </div>
