@@ -1,5 +1,6 @@
 flask==3.0.3
 werkzeug==3.0.1
+pdfminer.six==20221105
 python-docx==0.8.11
 
 

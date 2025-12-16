@@ -12,6 +12,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 from flask import send_from_directory
 from datetime import datetime
+from ai import analyzer
 from functools import wraps
 import os
 
@@ -187,8 +188,21 @@ def upload_resume():
             # fetch updated resume and stay on the same page
             resume = cursor.execute('SELECT filename, original_filename FROM resumes WHERE user_id = ?', (user_id,)).fetchone()
             conn.close()
+
+            # run analyzer and pass results to template
+            try:
+                # get seeker profile basics
+                pconn = get_db()
+                pc = pconn.cursor()
+                prof = pc.execute('SELECT education, experience_years, primary_skills FROM job_seekers WHERE user_id = ?', (user_id,)).fetchone()
+                pconn.close()
+                path = os.path.join(app.config['UPLOAD_FOLDER'], resume['filename'])
+                analysis = analyzer.analyze_resume_file(path, profile_skills=(prof['primary_skills'] if prof else ''), experience_years=(prof['experience_years'] if prof else 0), education=(prof['education'] if prof else ''))
+            except Exception:
+                analysis = None
+
             flash('Resume uploaded successfully', 'success')
-            return render_template('upload_resume.html', resume=resume)
+            return render_template('upload_resume.html', resume=resume, analysis=analysis)
         else:
             flash('File type not allowed. Allowed: pdf, doc, docx, txt', 'error')
             conn.close()
@@ -421,13 +435,24 @@ def seeker_dashboard():
     # fetch resume if exists
     resume = cursor.execute('SELECT filename, original_filename FROM resumes WHERE user_id = ?', (user_id,)).fetchone()
 
+    # run analyzer if resume exists
+    analysis = None
+    if resume:
+        try:
+            # get seeker profile basics
+            prof = cursor.execute('SELECT education, experience_years, primary_skills FROM job_seekers WHERE user_id = ?', (user_id,)).fetchone()
+            path = os.path.join(app.config['UPLOAD_FOLDER'], resume['filename'])
+            analysis = analyzer.analyze_resume_file(path, profile_skills=(prof['primary_skills'] if prof else ''), experience_years=(prof['experience_years'] if prof else 0), education=(prof['education'] if prof else ''))
+        except Exception:
+            analysis = None
+
     conn.close()
 
     if not profile:
         flash("No profile found. Please complete your profile.", "error")
         profile = {}
 
-    return render_template("seeker_dashboard.html", profile=profile, resume=resume)
+    return render_template("seeker_dashboard.html", profile=profile, resume=resume, analysis=analysis)
 
 
 @app.route("/seeker/profile", methods=["GET", "POST"])

@@ -97,12 +97,25 @@
                     <span class="badge bg-primary bg-opacity-10 text-primary">Latest</span>
                   </div>
                   <div class="d-flex align-items-center my-3">
-                    <div class="display-6 fw-bold text-primary me-3">82</div>
+                    {% if analysis %}
+                    <div class="display-6 fw-bold text-primary me-3">{{ analysis.ats.ats_score }}</div>
                     <div class="small text-muted">ATS Score</div>
+                    {% else %}
+                    <div class="display-6 fw-bold text-primary me-3">--</div>
+                    <div class="small text-muted">ATS Score</div>
+                    {% endif %}
                   </div>
                   <div class="small">
-                    <p class="mb-1"><strong>Skill gaps:</strong> AWS, Docker</p>
-                    <p class="mb-1"><strong>Suggestions:</strong> Add project metrics; include cloud keywords.</p>
+                    {% if analysis %}
+                      <p class="mb-1"><strong>Extracted skills:</strong> {{ analysis.extracted_skills | join(', ') }}</p>
+                      <p class="mb-1"><strong>Missing skills:</strong> {{ analysis.ats.missing_skills | join(', ') if analysis.ats.missing_skills else 'None' }}</p>
+                      {% if analysis.suggestions %}
+                        <p class="mb-1"><strong>Suggestions:</strong> {{ analysis.suggestions | join('; ') }}</p>
+                      {% endif %}
+                    {% else %}
+                      <p class="mb-1"><strong>Skill gaps:</strong> AWS, Docker</p>
+                      <p class="mb-1"><strong>Suggestions:</strong> Add project metrics; include cloud keywords.</p>
+                    {% endif %}
                   </div>
                   <div class="d-flex gap-2 mt-3">
                     <button class="btn btn-primary flex-grow-1">Re-run Analysis</button>

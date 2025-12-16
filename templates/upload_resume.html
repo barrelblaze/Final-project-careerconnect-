@@ -41,6 +41,19 @@
                 </div>
               {% endif %}
 
+              {% if analysis %}
+                <div class="card mb-3">
+                  <div class="card-body small">
+                    <div><strong>ATS Score:</strong> {{ analysis.ats.ats_score }}</div>
+                    <div><strong>Extracted skills:</strong> {{ analysis.extracted_skills | join(', ') }}</div>
+                    <div><strong>Missing skills:</strong> {{ analysis.ats.missing_skills | join(', ') if analysis.ats.missing_skills else 'None' }}</div>
+                    {% if analysis.suggestions %}
+                      <div><strong>Suggestions:</strong> {{ analysis.suggestions | join('; ') }}</div>
+                    {% endif %}
+                  </div>
+                </div>
+              {% endif %}
+
               <form method="POST" enctype="multipart/form-data" action="{{ url_for('upload_resume') }}">
                 <div class="mb-3">
                   <label for="resume" class="form-label">Choose resume file</label>
