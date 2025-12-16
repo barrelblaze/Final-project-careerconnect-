@@ -11,8 +11,16 @@ def login():
     return render_template("login.html")
 
 @app.route("/register")
-def register():
-    return render_template("register.html")
+def register_choice():
+    return render_template("register_choice.html")
+
+@app.route("/register/seeker")
+def register_seeker():
+    return render_template("register_seeker.html")
+
+@app.route("/register/company")
+def register_company():
+    return render_template("register_company.html")
 
 @app.route("/seeker/dashboard")
 def seeker_dashboard():

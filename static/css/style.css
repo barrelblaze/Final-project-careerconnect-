@@ -107,4 +107,14 @@ a:hover {
   font-size: 0.95rem;
 }
 
+.hover-card {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.hover-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12) !important;
+  border-color: #2563eb !important;
+}
+
 
