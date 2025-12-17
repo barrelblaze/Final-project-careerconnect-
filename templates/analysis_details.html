@@ -28,7 +28,11 @@
             <h4>ATS Score: <span class="text-primary">{{ analysis.ats.ats_score }}</span></h4>
             <hr />
             <p><strong>Extracted skills:</strong> {{ analysis.extracted_skills | join(', ') }}</p>
-            <p><strong>Missing skills:</strong> {{ analysis.ats.missing_skills | join(', ') if analysis.ats.missing_skills else 'None' }}</p>
+            {% if role_missing is not none %}
+              <p><strong>Missing skills for selected role:</strong> {{ role_missing | join(', ') if role_missing else 'None or no mapping' }}</p>
+            {% else %}
+              <p><strong>Missing skills:</strong> {{ analysis.ats.missing_skills | join(', ') if analysis.ats.missing_skills else 'None' }}</p>
+            {% endif %}
             <p><strong>Predicted roles:</strong> {{ analysis.predicted_roles | join(', ') if analysis.predicted_roles else 'N/A' }}</p>
             <p><strong>Suggestions:</strong></p>
             <ul>

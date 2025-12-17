@@ -179,7 +179,7 @@ def upload_resume():
             filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
             file.save(filepath)
 
-            existing = cursor.execute('SELECT id, filename FROM resumes WHERE user_id = ?', (user_id,)).fetchone()
+            existing = cursor.execute('SELECT id, filename, job_role FROM resumes WHERE user_id = ?', (user_id,)).fetchone()
 
             if existing:
                 # remove previous file if exists
@@ -190,14 +190,16 @@ def upload_resume():
                 except Exception:
                     pass
 
+                # preserve existing job_role if user did not submit a new one
+                new_job_role = job_role if job_role is not None and job_role != '' else (existing['job_role'] if existing and 'job_role' in existing.keys() else None)
                 cursor.execute(
-                    'UPDATE resumes SET filename = ?, original_filename = ?, uploaded_at = CURRENT_TIMESTAMP WHERE id = ?',
-                    (filename, file.filename, existing['id']),
+                    'UPDATE resumes SET filename = ?, original_filename = ?, job_role = ?, uploaded_at = CURRENT_TIMESTAMP WHERE id = ?',
+                    (filename, file.filename, new_job_role, existing['id']),
                 )
             else:
                 cursor.execute(
-                    'INSERT INTO resumes (user_id, filename, original_filename) VALUES (?, ?, ?)',
-                    (user_id, filename, file.filename),
+                    'INSERT INTO resumes (user_id, filename, original_filename, job_role) VALUES (?, ?, ?, ?)',
+                    (user_id, filename, file.filename, job_role),
                 )
 
             conn.commit()
@@ -532,7 +534,7 @@ def analysis_details():
     user_id = session.get('user_id')
     conn = get_db()
     cursor = conn.cursor()
-    resume = cursor.execute('SELECT filename, original_filename FROM resumes WHERE user_id = ?', (user_id,)).fetchone()
+    resume = cursor.execute('SELECT filename, original_filename, job_role FROM resumes WHERE user_id = ?', (user_id,)).fetchone()
     if not resume:
         conn.close()
         flash('No resume found for analysis', 'error')
