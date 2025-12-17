@@ -94,11 +94,24 @@ def init_db():
             user_id INTEGER NOT NULL,
             filename TEXT NOT NULL,
             original_filename TEXT,
+            job_role TEXT,
             uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         )
     ''')
     conn.commit()
+    conn.close()
+
+    # ensure resumes table has job_role column (for older DBs)
+    conn = get_db()
+    cur = conn.cursor()
+    cols = [c[1] for c in cur.execute("PRAGMA table_info(resumes)").fetchall()]
+    if 'job_role' not in cols:
+        try:
+            cur.execute('ALTER TABLE resumes ADD COLUMN job_role TEXT')
+            conn.commit()
+        except Exception:
+            pass
     conn.close()
 
 # Initialize database on app start
@@ -142,8 +155,8 @@ def upload_resume():
     conn = get_db()
     cursor = conn.cursor()
 
-    # fetch existing resume if any
-    resume = cursor.execute('SELECT filename, original_filename FROM resumes WHERE user_id = ?', (user_id,)).fetchone()
+    # fetch existing resume if any (include saved job_role)
+    resume = cursor.execute('SELECT filename, original_filename, job_role FROM resumes WHERE user_id = ?', (user_id,)).fetchone()
 
     if request.method == 'POST':
         if 'resume' not in request.files:
@@ -189,8 +202,8 @@ def upload_resume():
 
             conn.commit()
 
-            # fetch updated resume and stay on the same page
-            resume = cursor.execute('SELECT filename, original_filename FROM resumes WHERE user_id = ?', (user_id,)).fetchone()
+            # fetch updated resume and stay on the same page (include job_role)
+            resume = cursor.execute('SELECT filename, original_filename, job_role FROM resumes WHERE user_id = ?', (user_id,)).fetchone()
             conn.close()
 
             # run analyzer and pass results to template
@@ -457,8 +470,9 @@ def seeker_dashboard():
         (user_id,),
     ).fetchone()
 
-    # fetch resume if exists
-    resume = cursor.execute('SELECT filename, original_filename FROM resumes WHERE user_id = ?', (user_id,)).fetchone()
+    # fetch resume if exists (include saved job_role)
+    resume = cursor.execute('SELECT filename, original_filename, job_role FROM resumes WHERE user_id = ?', (user_id,)).fetchone()
+    selected_role = resume['job_role'] if resume and 'job_role' in resume.keys() and resume['job_role'] else None
 
     # run analyzer if resume exists
     analysis = None
@@ -470,6 +484,9 @@ def seeker_dashboard():
             analysis = analyzer.analyze_resume_file(path, profile_skills=(prof['primary_skills'] if prof else ''), experience_years=(prof['experience_years'] if prof else 0), education=(prof['education'] if prof else ''))
         except Exception:
             analysis = None
+            # optional job role
+            job_role = request.form.get('job_role')
+
 
     conn.close()
 
@@ -477,7 +494,7 @@ def seeker_dashboard():
         flash("No profile found. Please complete your profile.", "error")
         profile = {}
 
-    return render_template("seeker_dashboard.html", profile=profile, resume=resume, analysis=analysis)
+    return render_template("seeker_dashboard.html", profile=profile, resume=resume, analysis=analysis, selected_role=selected_role)
 
 
 @app.route('/seeker/analysis/rerun', methods=['POST'])
@@ -487,7 +504,7 @@ def rerun_analysis():
     conn = get_db()
     cursor = conn.cursor()
 
-    resume = cursor.execute('SELECT filename, original_filename FROM resumes WHERE user_id = ?', (user_id,)).fetchone()
+    resume = cursor.execute('SELECT filename, original_filename, job_role FROM resumes WHERE user_id = ?', (user_id,)).fetchone()
     if not resume:
         conn.close()
         return jsonify({'error': 'no_resume'}), 400
@@ -521,8 +538,8 @@ def analysis_details():
         flash('No resume found for analysis', 'error')
         return redirect(url_for('seeker_dashboard'))
 
-    # optional job role via query param
-    job_role = request.args.get('job_role')
+    # optional job role via query param, fallback to saved resume job_role
+    job_role = request.args.get('job_role') or (resume['job_role'] if resume and 'job_role' in resume.keys() and resume['job_role'] else None)
 
     try:
         prof = cursor.execute('SELECT education, experience_years, primary_skills FROM job_seekers WHERE user_id = ?', (user_id,)).fetchone()
