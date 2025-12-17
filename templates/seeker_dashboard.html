@@ -98,19 +98,21 @@
                   </div>
                   <div class="d-flex align-items-center my-3">
                     {% if analysis %}
-                    <div class="display-6 fw-bold text-primary me-3">{{ analysis.ats.ats_score }}</div>
+                    <div id="ats-score" class="display-6 fw-bold text-primary me-3">{{ analysis.ats.ats_score }}</div>
                     <div class="small text-muted">ATS Score</div>
                     {% else %}
-                    <div class="display-6 fw-bold text-primary me-3">--</div>
+                    <div id="ats-score" class="display-6 fw-bold text-primary me-3">--</div>
                     <div class="small text-muted">ATS Score</div>
                     {% endif %}
                   </div>
                   <div class="small">
                     {% if analysis %}
-                      <p class="mb-1"><strong>Extracted skills:</strong> {{ analysis.extracted_skills | join(', ') }}</p>
-                      <p class="mb-1"><strong>Missing skills:</strong> {{ analysis.ats.missing_skills | join(', ') if analysis.ats.missing_skills else 'None' }}</p>
+                      <p class="mb-1"><strong>Extracted skills:</strong> <span id="extracted-skills">{{ analysis.extracted_skills | join(', ') }}</span></p>
+                      <p class="mb-1"><strong>Missing skills:</strong> <span id="missing-skills">{{ analysis.ats.missing_skills | join(', ') if analysis.ats.missing_skills else 'None' }}</span></p>
                       {% if analysis.suggestions %}
-                        <p class="mb-1"><strong>Suggestions:</strong> {{ analysis.suggestions | join('; ') }}</p>
+                        <p class="mb-1"><strong>Suggestions:</strong> <span id="suggestions">{{ analysis.suggestions | join('; ') }}</span></p>
+                      {% else %}
+                        <p class="mb-1"><strong>Suggestions:</strong> <span id="suggestions">None</span></p>
                       {% endif %}
                     {% else %}
                       <p class="mb-1"><strong>Skill gaps:</strong> AWS, Docker</p>
@@ -118,8 +120,11 @@
                     {% endif %}
                   </div>
                   <div class="d-flex gap-2 mt-3">
-                    <button class="btn btn-primary flex-grow-1">Re-run Analysis</button>
-                    <button class="btn btn-outline-secondary flex-grow-1">View Details</button>
+                    <button id="rerun-analysis" class="btn btn-primary flex-grow-1" type="button">
+                      <span id="rerun-spinner" class="spinner-border spinner-border-sm me-2 d-none" role="status" aria-hidden="true"></span>
+                      <span id="rerun-text">Re-run Analysis</span>
+                    </button>
+                    <button id="view-details" class="btn btn-outline-secondary flex-grow-1" onclick="location.href='{{ url_for('analysis_details') }}'">View Details</button>
                   </div>
                 </div>
               </div>
@@ -235,72 +240,140 @@
                   <option>Hired</option>
                 </select>
               </div>
-              <div class="table-responsive">
-                <table class="table align-middle mb-0">
-                  <thead class="table-light">
-                    <tr>
-                      <th>Role</th>
-                      <th>Company</th>
-                      <th>Status</th>
-                      <th>Applied</th>
-                      <th>Match</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr>
-                      <td>Backend Engineer</td>
-                      <td>Tech Corp</td>
-                      <td><span class="badge bg-secondary">Applied</span></td>
-                      <td><small class="text-muted">3 days ago</small></td>
-                      <td><span class="badge bg-primary bg-opacity-10 text-primary">88%</span></td>
-                    </tr>
-                    <tr>
-                      <td>Data Analyst</td>
-                      <td>Analytics Inc</td>
-                      <td><span class="badge bg-info text-dark">Shortlisted</span></td>
-                      <td><small class="text-muted">1 week ago</small></td>
-                      <td><span class="badge bg-primary bg-opacity-10 text-primary">80%</span></td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        </div>
+              <script
+                src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"
+                integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL"
+                crossorigin="anonymous"
+              ></script>
 
-        <div class="col-lg-4" id="saved">
-          <div class="card shadow-sm h-100">
-            <div class="card-body">
-              <h5 class="mb-3">Saved Jobs</h5>
-              <div class="list-group small">
-                <a class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-                  <div>
-                    <div class="fw-semibold">ML Engineer</div>
-                    <div class="text-muted">AI Labs • Remote</div>
+              <!-- Analysis modal -->
+              <div class="modal fade" id="analysisModal" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog modal-dialog-centered">
+                  <div class="modal-content">
+                    <div class="modal-header">
+                      <h5 class="modal-title">Running analysis</h5>
+                      <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body d-flex align-items-center gap-3">
+                      <div class="spinner-border text-primary" role="status" id="modal-spinner" aria-hidden="true"></div>
+                      <div id="modal-message">Analyzing your resume — this may take a few seconds.</div>
+                    </div>
                   </div>
-                  <button class="btn btn-sm btn-outline-primary">Apply</button>
-                </a>
-                <a class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
-                  <div>
-                    <div class="fw-semibold">Product Analyst</div>
-                    <div class="text-muted">FinTech Co • Hybrid</div>
-                  </div>
-                  <button class="btn btn-sm btn-outline-primary">Apply</button>
-                </a>
+                </div>
               </div>
-            </div>
-          </div>
+
+              <script>
+                (function(){
+                  const rerunBtn = document.getElementById('rerun-analysis');
+                  const modalEl = document.getElementById('analysisModal');
+                  const modalMessage = document.getElementById('modal-message');
+                  const modalSpinner = document.getElementById('modal-spinner');
+                  if (!rerunBtn || !modalEl) return;
+
+                  const modal = new bootstrap.Modal(modalEl, { backdrop: 'static', keyboard: false });
+
+                  rerunBtn.addEventListener('click', async function(){
+                    // show modal with spinner
+                    modalMessage.innerText = 'Analyzing your resume — this may take a few seconds.';
+                    modalSpinner.style.display = '';
+                    modal.show();
+
+                    try{
+                      const resp = await fetch("{{ url_for('rerun_analysis') }}", { method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+                      if (!resp.ok){
+                        const j = await resp.json().catch(()=>({}));
+                        modalSpinner.style.display = 'none';
+                        modalMessage.innerText = 'Failed: ' + (j.error || resp.statusText);
+                        setTimeout(()=>modal.hide(), 1800);
+                        return;
+                      }
+
+                      const data = await resp.json();
+                      // update DOM fields
+                      const ats = document.getElementById('ats-score');
+                      const extracted = document.getElementById('extracted-skills');
+                      const missing = document.getElementById('missing-skills');
+                      const suggestions = document.getElementById('suggestions');
+
+                      if (ats && data.ats && typeof data.ats.ats_score !== 'undefined') ats.innerText = data.ats.ats_score;
+                      if (extracted && Array.isArray(data.extracted_skills)) extracted.innerText = data.extracted_skills.join(', ');
+                      if (missing && data.ats) missing.innerText = (data.ats.missing_skills && data.ats.missing_skills.length) ? data.ats.missing_skills.join(', ') : 'None';
+                      if (suggestions) suggestions.innerText = (data.suggestions && data.suggestions.length) ? data.suggestions.join('; ') : 'None';
+
+                      modalSpinner.style.display = 'none';
+                      modalMessage.innerText = 'Analysis completed';
+                      setTimeout(()=>modal.hide(), 1400);
+                    }catch(err){
+                      console.error(err);
+                      modalSpinner.style.display = 'none';
+                      modalMessage.innerText = 'Unexpected error while running analysis';
+                      setTimeout(()=>modal.hide(), 1800);
+                    }
+                  });
+                })();
+              </script>
+
+            </body>
+          </html>
+        if (!rerunBtn) return;
+
+        rerunBtn.addEventListener('click', async function(){
+          rerunBtn.disabled = true;
+          spinner.classList.remove('d-none');
+          try{
+            const resp = await fetch("{{ url_for('rerun_analysis') }}", { method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+            if (!resp.ok){
+              const j = await resp.json().catch(()=>({}));
+              const msg = 'Failed to re-run analysis: ' + (j.error || resp.statusText);
+              showToast(msg, 'danger');
+              return;
+            }
+            const data = await resp.json();
+            // update DOM fields
+            const ats = document.getElementById('ats-score');
+            const extracted = document.getElementById('extracted-skills');
+            const missing = document.getElementById('missing-skills');
+            const suggestions = document.getElementById('suggestions');
+
+            if (ats && data.ats && typeof data.ats.ats_score !== 'undefined') ats.innerText = data.ats.ats_score;
+            if (extracted && Array.isArray(data.extracted_skills)) extracted.innerText = data.extracted_skills.join(', ');
+            if (missing && data.ats) missing.innerText = (data.ats.missing_skills && data.ats.missing_skills.length) ? data.ats.missing_skills.join(', ') : 'None';
+            if (suggestions) suggestions.innerText = (data.suggestions && data.suggestions.length) ? data.suggestions.join('; ') : 'None';
+
+            showToast('Analysis completed', 'success');
+          }catch(err){
+            console.error(err);
+            showToast('Unexpected error while running analysis', 'danger');
+          }finally{
+            rerunBtn.disabled = false;
+            spinner.classList.add('d-none');
+          }
+        });
+
+        function showToast(message, variant){
+          if (!toastEl) return alert(message);
+          const body = toastEl.querySelector('.toast-body');
+          body.innerText = message;
+          // adjust header color briefly
+          const header = toastEl.querySelector('.toast-header');
+          header.className = 'toast-header';
+          if (variant === 'success') header.classList.add('text-success');
+          if (variant === 'danger') header.classList.add('text-danger');
+          toastInstance.show();
+        }
+      })();
+    </script>
+
+    <!-- Toast container -->
+    <div class="position-fixed bottom-0 end-0 p-3" style="z-index: 1100">
+      <div id="analysis-toast" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
+        <div class="toast-header">
+          <strong class="me-auto">Analysis</strong>
+          <small class="text-muted">now</small>
+          <button type="button" class="btn-close ms-2 mb-1" data-bs-dismiss="toast" aria-label="Close"></button>
         </div>
+        <div class="toast-body">Working...</div>
       </div>
     </div>
-
-    <script
-      src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"
-      integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL"
-      crossorigin="anonymous"
-    ></script>
-    
-  </body>
-</html>
 
 

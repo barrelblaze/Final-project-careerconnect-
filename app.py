@@ -6,6 +6,7 @@ from flask import (
     request,
     flash,
     session,
+    jsonify,
 )
 import sqlite3
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -453,6 +454,64 @@ def seeker_dashboard():
         profile = {}
 
     return render_template("seeker_dashboard.html", profile=profile, resume=resume, analysis=analysis)
+
+
+@app.route('/seeker/analysis/rerun', methods=['POST'])
+@login_required(role='seeker')
+def rerun_analysis():
+    user_id = session.get('user_id')
+    conn = get_db()
+    cursor = conn.cursor()
+
+    resume = cursor.execute('SELECT filename, original_filename FROM resumes WHERE user_id = ?', (user_id,)).fetchone()
+    if not resume:
+        conn.close()
+        return jsonify({'error': 'no_resume'}), 400
+
+    try:
+        prof = cursor.execute('SELECT education, experience_years, primary_skills FROM job_seekers WHERE user_id = ?', (user_id,)).fetchone()
+        path = os.path.join(app.config['UPLOAD_FOLDER'], resume['filename'])
+        analysis = analyzer.analyze_resume_file(
+            path,
+            profile_skills=(prof['primary_skills'] if prof else ''),
+            experience_years=(prof['experience_years'] if prof else 0),
+            education=(prof['education'] if prof else ''),
+        )
+    except Exception:
+        conn.close()
+        return jsonify({'error': 'analysis_failed'}), 500
+
+    conn.close()
+    return jsonify(analysis)
+
+
+@app.route('/seeker/analysis/details')
+@login_required(role='seeker')
+def analysis_details():
+    user_id = session.get('user_id')
+    conn = get_db()
+    cursor = conn.cursor()
+
+    resume = cursor.execute('SELECT filename, original_filename FROM resumes WHERE user_id = ?', (user_id,)).fetchone()
+    if not resume:
+        conn.close()
+        flash('No resume found for analysis', 'error')
+        return redirect(url_for('seeker_dashboard'))
+
+    try:
+        prof = cursor.execute('SELECT education, experience_years, primary_skills FROM job_seekers WHERE user_id = ?', (user_id,)).fetchone()
+        path = os.path.join(app.config['UPLOAD_FOLDER'], resume['filename'])
+        analysis = analyzer.analyze_resume_file(
+            path,
+            profile_skills=(prof['primary_skills'] if prof else ''),
+            experience_years=(prof['experience_years'] if prof else 0),
+            education=(prof['education'] if prof else ''),
+        )
+    except Exception:
+        analysis = None
+
+    conn.close()
+    return render_template('analysis_details.html', analysis=analysis, resume=resume)
 
 
 @app.route("/seeker/profile", methods=["GET", "POST"])
