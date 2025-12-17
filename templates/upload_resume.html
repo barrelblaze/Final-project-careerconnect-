@@ -56,9 +56,6 @@
                     {% if analysis.suggestions %}
                       <div><strong>Suggestions:</strong> {{ analysis.suggestions | join('; ') }}</div>
                     {% endif %}
-                    {% if role_missing is not none %}
-                      <div><strong>Missing skills for selected job:</strong> {{ role_missing | join(', ') if role_missing else 'None or no mapping' }}</div>
-                    {% endif %}
                     {% if role_suggestions %}
                       <div><strong>Suggestions for selected role:</strong> {{ role_suggestions | join('; ') }}</div>
                     {% endif %}
