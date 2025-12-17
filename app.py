@@ -515,12 +515,14 @@ def analysis_details():
     user_id = session.get('user_id')
     conn = get_db()
     cursor = conn.cursor()
-
     resume = cursor.execute('SELECT filename, original_filename FROM resumes WHERE user_id = ?', (user_id,)).fetchone()
     if not resume:
         conn.close()
         flash('No resume found for analysis', 'error')
         return redirect(url_for('seeker_dashboard'))
+
+    # optional job role via query param
+    job_role = request.args.get('job_role')
 
     try:
         prof = cursor.execute('SELECT education, experience_years, primary_skills FROM job_seekers WHERE user_id = ?', (user_id,)).fetchone()
@@ -531,11 +533,35 @@ def analysis_details():
             experience_years=(prof['experience_years'] if prof else 0),
             education=(prof['education'] if prof else ''),
         )
+
+        # compute role-specific info if requested
+        role_missing = None
+        role_suggestions = None
+        role_options = sorted(getattr(analyzer, 'ROLE_MAP', {}).keys())
+        if job_role:
+            jr = job_role.strip().lower()
+            role_map = getattr(analyzer, 'ROLE_MAP', {})
+            if jr in role_map:
+                required = set(role_map[jr])
+                found = set(analysis.get('extracted_skills', []))
+                missing_for_role = sorted(required - found)
+                role_missing = missing_for_role
+                if missing_for_role:
+                    role_suggestions = [f'Add skills: {", ".join(missing_for_role)} to match {job_role} roles']
+                else:
+                    role_suggestions = [f'Profile appears to cover common {job_role} skills']
+            else:
+                role_missing = []
+                role_suggestions = [f'No predefined skill mapping for "{job_role}".']
+
     except Exception:
         analysis = None
+        role_missing = None
+        role_suggestions = None
+        role_options = sorted(getattr(analyzer, 'ROLE_MAP', {}).keys())
 
     conn.close()
-    return render_template('analysis_details.html', analysis=analysis, resume=resume)
+    return render_template('analysis_details.html', analysis=analysis, resume=resume, role_missing=role_missing, role_suggestions=role_suggestions, role_options=role_options, selected_role=job_role)
 
 
 @app.route("/seeker/profile", methods=["GET", "POST"])

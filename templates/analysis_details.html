@@ -20,6 +20,23 @@
         </div>
       </div>
 
+      <form method="GET" class="mb-3">
+        <div class="row g-2 align-items-center">
+          <div class="col-auto">
+            <label for="job_role" class="form-label mb-0">Filter by job role</label>
+            <input list="role-list" name="job_role" id="job_role" class="form-control" placeholder="e.g. backend" value="{{ selected_role or '' }}" />
+            <datalist id="role-list">
+              {% for r in role_options or [] %}
+                <option value="{{ r }}"></option>
+              {% endfor %}
+            </datalist>
+          </div>
+          <div class="col-auto align-self-end">
+            <button class="btn btn-primary">Apply</button>
+          </div>
+        </div>
+      </form>
+
       <div class="card shadow-sm">
         <div class="card-body">
           {% if analysis %}
@@ -38,6 +55,15 @@
                 <li>None</li>
               {% endif %}
             </ul>
+
+            {% if role_missing is not none %}
+              <hr />
+              <p><strong>Missing skills for selected job:</strong> {{ role_missing | join(', ') if role_missing else 'None or no mapping' }}</p>
+            {% endif %}
+            {% if role_suggestions %}
+              <p><strong>Suggestions for selected role:</strong> {{ role_suggestions | join('; ') }}</p>
+            {% endif %}
+
             <hr />
             <p class="small text-muted">Text length: {{ analysis.text_length }}</p>
           {% else %}
