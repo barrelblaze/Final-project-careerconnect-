@@ -197,12 +197,12 @@
             <div class="card-body">
               <div class="d-flex justify-content-between align-items-center mb-3">
                 <h5 class="mb-0">Recent Applications</h5>
-                <select class="form-select form-select-sm" style="width: 160px;">
-                  <option selected>All statuses</option>
-                  <option>New</option>
-                  <option>Shortlisted</option>
-                  <option>Rejected</option>
-                  <option>Hired</option>
+                <select class="form-select form-select-sm" id="applicationsStatusFilter" style="width: 180px;">
+                  <option value="all" selected>All statuses</option>
+                  <option value="applied">New</option>
+                  <option value="shortlisted">Shortlisted</option>
+                  <option value="rejected">Rejected</option>
+                  <option value="hired">Hired</option>
                 </select>
               </div>
               <div class="table-responsive">
@@ -220,7 +220,7 @@
                   <tbody id="applications-tbody">
                     {% if applications and applications|length > 0 %}
                       {% for app in applications %}
-                      <tr>
+                      <tr data-status="{{ app.status }}">
                         <td>{{ app.candidate_name }}</td>
                         <td>{{ app.job_title }}</td>
                         <td>
@@ -376,6 +376,25 @@
           }
         });
       });
+
+      // Applications status filter (client-side)
+      (function() {
+        const statusFilter = document.getElementById('applicationsStatusFilter');
+        if (!statusFilter) return;
+
+        statusFilter.addEventListener('change', function() {
+          const value = this.value; // 'all', 'applied', 'shortlisted', 'rejected', 'hired'
+          const rows = document.querySelectorAll('#applications-tbody tr');
+          rows.forEach(row => {
+            const status = row.getAttribute('data-status');
+            if (value === 'all' || status === value) {
+              row.style.display = '';
+            } else {
+              row.style.display = 'none';
+            }
+          });
+        });
+      })();
     </script>
   </body>
 </html>
