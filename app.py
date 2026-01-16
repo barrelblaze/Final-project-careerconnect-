@@ -20,6 +20,14 @@ import os
 app = Flask(__name__)
 app.secret_key = 'your-secret-key-change-this-in-production'  # Change this in production
 
+# Session configuration - keep users logged in
+from datetime import timedelta
+app.config['SESSION_TYPE'] = 'filesystem'
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=7)  # Session lasts 7 days
+app.config['SESSION_COOKIE_SECURE'] = False  # Set to True in production with HTTPS
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+
 # Database setup
 DATABASE = 'careerconnect.db'
 UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), 'uploads')
@@ -34,9 +42,22 @@ os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 def get_db():
     """Get database connection"""
-    conn = sqlite3.connect(DATABASE)
+    conn = sqlite3.connect(DATABASE, timeout=10.0, check_same_thread=False)
     conn.row_factory = sqlite3.Row
+    # Enable WAL mode for better concurrent access
+    conn.execute('PRAGMA journal_mode=WAL')
     return conn
+
+@app.teardown_appcontext
+def close_db(error):
+    """Close database connections on app teardown"""
+    pass  # SQLite connections close automatically when dereferenced
+
+@app.before_request
+def refresh_session():
+    """Refresh session on each request to keep it alive"""
+    if 'user_id' in session:
+        session.modified = True  # Mark session as modified to extend lifetime
 
 def init_db():
     """Initialize database with tables"""
@@ -184,12 +205,25 @@ def login_required(role=None):
         def wrapped(*args, **kwargs):
             user_id = session.get("user_id")
             user_role = session.get("role")
+            
+            # Debug logging
             if not user_id:
+                print(f"DEBUG: No user_id in session for {request.path}")
                 flash("Please login to continue", "error")
                 return redirect(url_for("login"))
+            
             if role and user_role != role:
+                print(f"DEBUG: Role mismatch for {request.path}. Expected: {role}, Got: {user_role}")
                 flash("Access denied for this role", "error")
+                # Redirect to appropriate dashboard instead of login
+                if user_role == "seeker":
+                    return redirect(url_for("seeker_dashboard"))
+                elif user_role == "recruiter":
+                    return redirect(url_for("recruiter_dashboard"))
                 return redirect(url_for("login"))
+            
+            # Refresh session timestamp on each authenticated request
+            session.modified = True
             return f(*args, **kwargs)
 
         return wrapped
@@ -353,6 +387,7 @@ def login():
             
             if user and check_password_hash(user['password_hash'], password):
                 # Set session
+                session.permanent = True  # Make session persistent
                 session['user_id'] = user['id']
                 session['username'] = user['username']
                 session['role'] = user['role']
@@ -1173,32 +1208,73 @@ def post_job():
         employment_type = request.form.get("employment_type")
 
         if not all([job_title, job_description, required_skills, experience_level, job_location, employment_type]):
-            flash("All fields are required", "error")
+            error_msg = "All fields are required"
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return jsonify({'success': False, 'error': error_msg}), 400
+            flash(error_msg, "error")
             return render_template("post_job.html")
 
         conn = get_db()
         cursor = conn.cursor()
 
         try:
+            # Get recruiter ID
+            recruiter = cursor.execute('SELECT id FROM recruiters WHERE user_id = ?', (user_id,)).fetchone()
+            if not recruiter:
+                error_msg = "Recruiter profile not found"
+                if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                    return jsonify({'success': False, 'error': error_msg}), 404
+                flash(error_msg, "error")
+                return render_template("post_job.html")
+            
             cursor.execute(
                 """
                 INSERT INTO job_postings 
                 (recruiter_id, job_title, job_description, required_skills, experience_level, salary_range, job_location, employment_type)
-                VALUES (
-                    (SELECT id FROM recruiters WHERE user_id = ?),
-                    ?, ?, ?, ?, ?, ?, ?
-                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (user_id, job_title, job_description, required_skills, experience_level, salary_range, job_location, employment_type),
+                (recruiter['id'], job_title, job_description, required_skills, experience_level, salary_range, job_location, employment_type),
             )
             conn.commit()
+            
+            # Get the newly inserted job ID
+            job_id = cursor.lastrowid
+            
+            # Fetch the complete job data with company info
+            job = cursor.execute(
+                """
+                SELECT jp.id, jp.job_title, jp.job_location, jp.employment_type, 
+                       jp.experience_level, jp.salary_range, jp.required_skills, 
+                       jp.job_description, r.company_name
+                FROM job_postings jp
+                JOIN recruiters r ON jp.recruiter_id = r.id
+                WHERE jp.id = ?
+                """,
+                (job_id,)
+            ).fetchone()
+            
+            conn.close()
+            
+            # If AJAX request, return JSON
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return jsonify({
+                    'success': True,
+                    'message': 'Job posted successfully!',
+                    'job': dict(job) if job else {}
+                }), 201
+            
+            # Otherwise, redirect
             flash("Job posted successfully!", "success")
             return redirect(url_for("recruiter_dashboard"))
         except Exception as e:
             conn.rollback()
-            flash(f"Failed to post job: {str(e)}", "error")
-        finally:
             conn.close()
+            error_msg = f"Failed to post job: {str(e)}"
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return jsonify({'success': False, 'error': error_msg}), 500
+            flash(error_msg, "error")
+        
+        return render_template("post_job.html")
 
     return render_template("post_job.html")
 
@@ -1375,12 +1451,16 @@ def delete_job(job_id):
     recruiter = cursor.execute('SELECT id FROM recruiters WHERE user_id = ?', (user_id,)).fetchone()
     if not recruiter:
         conn.close()
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({'success': False, 'error': 'Recruiter profile not found.'}), 404
         flash("Recruiter profile not found.", "error")
         return redirect(url_for("recruiter_dashboard"))
 
     job = cursor.execute('SELECT id FROM job_postings WHERE id = ? AND recruiter_id = ?', (job_id, recruiter['id'])).fetchone()
     if not job:
         conn.close()
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({'success': False, 'error': 'Job not found or you do not have access.'}), 404
         flash("Job not found or you do not have access.", "error")
         return redirect(url_for("recruiter_dashboard"))
 
@@ -1390,12 +1470,19 @@ def delete_job(job_id):
         cursor.execute('DELETE FROM saved_jobs WHERE job_id = ?', (job_id,))
         cursor.execute('DELETE FROM job_postings WHERE id = ?', (job_id,))
         conn.commit()
+        conn.close()
+        
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({'success': True, 'message': 'Job deleted successfully.'}), 200
+        
         flash("Job deleted successfully.", "success")
     except Exception as e:
         conn.rollback()
-        flash(f"Failed to delete job: {str(e)}", "error")
-    finally:
         conn.close()
+        error_msg = f"Failed to delete job: {str(e)}"
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({'success': False, 'error': error_msg}), 500
+        flash(error_msg, "error")
 
     return redirect(url_for("recruiter_dashboard"))
 
@@ -1406,53 +1493,58 @@ def all_candidates():
     conn = get_db()
     cursor = conn.cursor()
 
-    recruiter = cursor.execute('SELECT id FROM recruiters WHERE user_id = ?', (user_id,)).fetchone()
-    if not recruiter:
+    try:
+        recruiter = cursor.execute('SELECT id FROM recruiters WHERE user_id = ?', (user_id,)).fetchone()
+        if not recruiter:
+            conn.close()
+            return redirect(url_for("recruiter_dashboard"))
+
+        # Fetch all candidates who applied to recruiter's jobs
+        candidates = cursor.execute(
+            """
+            SELECT DISTINCT
+                   js.id as seeker_id, js.full_name, js.email,
+                   js.primary_skills, js.experience_years, js.user_id,
+                   COUNT(a.id) as application_count
+            FROM applications a
+            JOIN job_postings jp ON a.job_id = jp.id
+            JOIN job_seekers js ON a.seeker_id = js.id
+            WHERE jp.recruiter_id = ?
+            GROUP BY js.id
+            ORDER BY js.full_name
+            """,
+            (recruiter['id'],),
+        ).fetchall()
+
+        # Compute ATS scores for all candidates
+        candidate_ats_scores = {}
+        for candidate in candidates:
+            try:
+                resume = cursor.execute(
+                    'SELECT filename FROM resumes WHERE user_id = ?',
+                    (candidate['user_id'],)
+                ).fetchone()
+                
+                if resume:
+                    resume_path = os.path.join(app.config['UPLOAD_FOLDER'], resume['filename'])
+                    if os.path.exists(resume_path):
+                        analysis_result = analyzer.analyze_resume_file(
+                            resume_path,
+                            profile_skills=candidate['primary_skills'] or '',
+                            experience_years=candidate['experience_years'] or 0,
+                        )
+                        if analysis_result and 'ats' in analysis_result:
+                            candidate_ats_scores[candidate['seeker_id']] = analysis_result['ats']['ats_score']
+            except Exception as e:
+                print(f"Error analyzing candidate {candidate.get('seeker_id')}: {str(e)}")
+                pass
+
         conn.close()
-        flash("Recruiter profile not found.", "error")
-        return redirect(url_for("recruiter_dashboard"))
-
-    # Fetch all candidates who applied to recruiter's jobs
-    candidates = cursor.execute(
-        """
-        SELECT DISTINCT
-               js.id as seeker_id, js.full_name, js.email,
-               js.primary_skills, js.experience_years, js.user_id,
-               COUNT(a.id) as application_count
-        FROM applications a
-        JOIN job_postings jp ON a.job_id = jp.id
-        JOIN job_seekers js ON a.seeker_id = js.id
-        WHERE jp.recruiter_id = ?
-        GROUP BY js.id
-        ORDER BY js.full_name
-        """,
-        (recruiter['id'],),
-    ).fetchall()
-
-    # Compute ATS scores for all candidates
-    candidate_ats_scores = {}
-    for candidate in candidates:
-        try:
-            resume = cursor.execute(
-                'SELECT filename FROM resumes WHERE user_id = ?',
-                (candidate['user_id'],)
-            ).fetchone()
-            
-            if resume:
-                resume_path = os.path.join(app.config['UPLOAD_FOLDER'], resume['filename'])
-                if os.path.exists(resume_path):
-                    analysis_result = analyzer.analyze_resume_file(
-                        resume_path,
-                        profile_skills=candidate['primary_skills'] or '',
-                        experience_years=candidate['experience_years'] or 0,
-                    )
-                    if analysis_result and 'ats' in analysis_result:
-                        candidate_ats_scores[candidate['seeker_id']] = analysis_result['ats']['ats_score']
-        except Exception:
-            pass
-
-    conn.close()
-    return render_template("all_candidates.html", candidates=candidates or [], candidate_ats_scores=candidate_ats_scores)
+        return render_template("all_candidates.html", candidates=candidates or [], candidate_ats_scores=candidate_ats_scores)
+    except Exception as e:
+        conn.close()
+        print(f"Error in all_candidates: {str(e)}")
+        return render_template("all_candidates.html", candidates=[], candidate_ats_scores={})
 
 @app.route("/recruiter/all_shortlisted")
 @login_required(role="recruiter")
@@ -1464,7 +1556,6 @@ def all_shortlisted():
     recruiter = cursor.execute('SELECT id FROM recruiters WHERE user_id = ?', (user_id,)).fetchone()
     if not recruiter:
         conn.close()
-        flash("Recruiter profile not found.", "error")
         return redirect(url_for("recruiter_dashboard"))
 
     # Fetch all shortlisted candidates
@@ -1518,7 +1609,6 @@ def analytics():
     recruiter = cursor.execute('SELECT id FROM recruiters WHERE user_id = ?', (user_id,)).fetchone()
     if not recruiter:
         conn.close()
-        flash("Recruiter profile not found.", "error")
         return redirect(url_for("recruiter_dashboard"))
 
     # Get various analytics metrics
@@ -1820,72 +1910,81 @@ def all_jobs():
     conn = get_db()
     cursor = conn.cursor()
 
-    # Fetch all active job postings
-    jobs = cursor.execute(
-        """
-        SELECT jp.id, jp.job_title, jp.job_location, jp.employment_type,
-               jp.experience_level, jp.salary_range, jp.required_skills,
-               jp.job_description, r.company_name,
-               CASE WHEN a.id IS NOT NULL THEN 1 ELSE 0 END as already_applied,
-               CASE WHEN sj.id IS NOT NULL THEN 1 ELSE 0 END as is_saved
-        FROM job_postings jp
-        JOIN recruiters r ON jp.recruiter_id = r.id
-        LEFT JOIN applications a ON a.job_id = jp.id AND a.seeker_id = (
-            SELECT id FROM job_seekers WHERE user_id = ?
-        )
-        LEFT JOIN saved_jobs sj ON sj.job_id = jp.id AND sj.seeker_id = (
-            SELECT id FROM job_seekers WHERE user_id = ?
-        )
-        WHERE jp.is_active = 1
-        ORDER BY jp.id DESC
-        """,
-        (user_id, user_id),
-    ).fetchall()
+    try:
+        # Fetch all active job postings
+        jobs = cursor.execute(
+            """
+            SELECT jp.id, jp.job_title, jp.job_location, jp.employment_type,
+                   jp.experience_level, jp.salary_range, jp.required_skills,
+                   jp.job_description, r.company_name,
+                   CASE WHEN a.id IS NOT NULL THEN 1 ELSE 0 END as already_applied,
+                   CASE WHEN sj.id IS NOT NULL THEN 1 ELSE 0 END as is_saved
+            FROM job_postings jp
+            JOIN recruiters r ON jp.recruiter_id = r.id
+            LEFT JOIN applications a ON a.job_id = jp.id AND a.seeker_id = (
+                SELECT id FROM job_seekers WHERE user_id = ?
+            )
+            LEFT JOIN saved_jobs sj ON sj.job_id = jp.id AND sj.seeker_id = (
+                SELECT id FROM job_seekers WHERE user_id = ?
+            )
+            WHERE jp.is_active = 1
+            ORDER BY jp.id DESC
+            """,
+            (user_id, user_id),
+        ).fetchall()
 
-    # Get seeker profile and resume skills
-    seeker = cursor.execute(
-        'SELECT id, primary_skills FROM job_seekers WHERE user_id = ?',
-        (user_id,)
-    ).fetchone()
-
-    seeker_skills = set()
-    if seeker:
-        if seeker['primary_skills']:
-            seeker_skills.update(skill.strip().lower() for skill in seeker['primary_skills'].split(','))
-        
-        # Add skills from resume if available
-        resume = cursor.execute(
-            'SELECT filename FROM resumes WHERE user_id = ?',
+        # Get seeker profile and resume skills
+        seeker = cursor.execute(
+            'SELECT id, primary_skills FROM job_seekers WHERE user_id = ?',
             (user_id,)
         ).fetchone()
-        
-        if resume:
-            resume_path = os.path.join(app.config['UPLOAD_FOLDER'], resume['filename'])
-            if os.path.exists(resume_path):
-                try:
-                    analysis_result = analyzer.analyze_resume_file(
-                        resume_path,
-                        profile_skills=seeker['primary_skills'] or '',
-                        experience_years=0,
-                    )
-                    if analysis_result and 'extracted_skills' in analysis_result:
-                        seeker_skills.update(skill.lower() for skill in analysis_result['extracted_skills'])
-                except Exception:
-                    pass
 
-    # Compute match scores
-    match_scores = {}
-    for job in jobs:
-        job_skills = set(skill.strip().lower() for skill in (job['required_skills'] or '').split(',') if skill.strip())
-        if job_skills:
-            matched = len(seeker_skills & job_skills)
-            match_percentage = round((matched / len(job_skills)) * 100)
-            match_scores[job['id']] = match_percentage
-        else:
-            match_scores[job['id']] = 0
+        seeker_skills = set()
+        if seeker:
+            if seeker['primary_skills']:
+                seeker_skills.update(skill.strip().lower() for skill in seeker['primary_skills'].split(','))
+            
+            # Add skills from resume if available
+            try:
+                resume = cursor.execute(
+                    'SELECT filename FROM resumes WHERE user_id = ?',
+                    (user_id,)
+                ).fetchone()
+                
+                if resume:
+                    resume_path = os.path.join(app.config['UPLOAD_FOLDER'], resume['filename'])
+                    if os.path.exists(resume_path):
+                        analysis_result = analyzer.analyze_resume_file(
+                            resume_path,
+                            profile_skills=seeker['primary_skills'] or '',
+                            experience_years=0,
+                        )
+                        if analysis_result and 'extracted_skills' in analysis_result:
+                            seeker_skills.update(skill.lower() for skill in analysis_result['extracted_skills'])
+            except Exception as e:
+                print(f"Error extracting resume skills: {str(e)}")
+                pass
 
-    conn.close()
-    return render_template("all_jobs.html", jobs=jobs or [], match_scores=match_scores)
+        # Compute match scores
+        match_scores = {}
+        for job in jobs:
+            try:
+                job_skills = set(skill.strip().lower() for skill in (job['required_skills'] or '').split(',') if skill.strip())
+                if job_skills:
+                    matched = len(seeker_skills & job_skills)
+                    match_percentage = round((matched / len(job_skills)) * 100)
+                    match_scores[job['id']] = match_percentage
+                else:
+                    match_scores[job['id']] = 0
+            except Exception:
+                match_scores[job['id']] = 0
+
+        conn.close()
+        return render_template("all_jobs.html", jobs=jobs or [], match_scores=match_scores)
+    except Exception as e:
+        conn.close()
+        print(f"Error in all_jobs: {str(e)}")
+        return render_template("all_jobs.html", jobs=[], match_scores={})
 
 @app.route("/seeker/my_applications")
 @login_required(role="seeker")
@@ -1901,7 +2000,6 @@ def my_applications():
 
     if not seeker:
         conn.close()
-        flash("Seeker profile not found.", "error")
         return redirect(url_for("seeker_dashboard"))
 
     # Fetch all applications for this seeker
@@ -1973,7 +2071,6 @@ def my_saved_jobs():
 
     if not seeker:
         conn.close()
-        flash("Seeker profile not found.", "error")
         return redirect(url_for("seeker_dashboard"))
 
     # Fetch all saved jobs for this seeker
@@ -2002,5 +2099,27 @@ def logout():
     flash("Logged out", "success")
     return redirect(url_for("login"))
 
+@app.errorhandler(Exception)
+def handle_error(error):
+    """Global error handler to prevent session loss on errors"""
+    print(f"ERROR: {str(error)}")
+    import traceback
+    traceback.print_exc()
+    
+    # Don't clear session on errors
+    user_id = session.get("user_id")
+    user_role = session.get("role")
+    
+    if user_id:
+        # User is logged in, redirect to appropriate dashboard without error message
+        if user_role == "seeker":
+            return redirect(url_for("seeker_dashboard"))
+        elif user_role == "recruiter":
+            return redirect(url_for("recruiter_dashboard"))
+    
+    # User not logged in
+    return redirect(url_for("login"))
+
 if __name__ == "__main__":
+    init_db()
     app.run(debug=True)
