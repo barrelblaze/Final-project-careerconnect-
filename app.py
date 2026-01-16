@@ -214,13 +214,8 @@ def login_required(role=None):
             
             if role and user_role != role:
                 print(f"DEBUG: Role mismatch for {request.path}. Expected: {role}, Got: {user_role}")
-                flash("Access denied for this role", "error")
-                # Redirect to appropriate dashboard instead of login
-                if user_role == "seeker":
-                    return redirect(url_for("seeker_dashboard"))
-                elif user_role == "recruiter":
-                    return redirect(url_for("recruiter_dashboard"))
-                return redirect(url_for("login"))
+                # Stay on current dashboard - don't switch roles
+                return redirect(request.referrer or url_for("login"))
             
             # Refresh session timestamp on each authenticated request
             session.modified = True
